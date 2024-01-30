@@ -1,3 +1,5 @@
+[![Java CI with Maven](https://github.com/daalfa/hostfully-spring-boot/actions/workflows/maven.yml/badge.svg?branch=master)](https://github.com/daalfa/hostfully-spring-boot/actions/workflows/maven.yml)
+
 # Booking Service for Home Showing
 This is a simple booking service for home showing.  
 It is a Spring Boot application with H2 database.  
