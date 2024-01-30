@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - include:
+      file: db/db-changelog.yml
+
+  - changeSet:
+      id: integration-test-data
+      author: davi
+      changes:
+        - insert:
+            tableName: property
+            columns:
+              - column:
+                  name: name
+                  value: House 2

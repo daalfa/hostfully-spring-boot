@@ -1,0 +1,115 @@
+databaseChangeLog:
+  - changeSet:
+      id: Create-booking-table
+      author: davi
+      changes:
+        - createTable:
+            schema: public
+            tableName: booking
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: varchar(255)
+              - column:
+                  name: start_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_canceled
+                  type: boolean
+                  defaultValue: false
+              - column:
+                  name: property_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - createIndex:
+                  tableName: booking
+                  indexName: idx_property_id_start_at
+                  unique: false
+                  columns:
+                    - column:
+                        name: property_id
+                    - column:
+                        name: start_at
+  - changeSet:
+      id: Create-property-table
+      author: davi
+      changes:
+        - createTable:
+            schema: public
+            tableName: property
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+  - changeSet:
+      id: Create-blocking-table
+      author: davi
+      changes:
+        - createTable:
+            schema: public
+            tableName: blocking
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(255)
+              - column:
+                  name: blocking_time
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: property_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: test-data
+      author: davi
+      changes:
+        - insert:
+            tableName: property
+            columns:
+              - column:
+                  name: name
+                  value: House 1
+        - insert:
+            tableName: booking
+            columns:
+              - column:
+                  name: name
+                  value: "Booking 1"
+              - column:
+                  name: start_at
+                  value: "2024-01-01 10:00:00"
+              - column:
+                  name: property_id
+                  value: "1"
