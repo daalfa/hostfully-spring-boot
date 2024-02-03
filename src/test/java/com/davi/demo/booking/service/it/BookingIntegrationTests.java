@@ -238,9 +238,9 @@ class BookingIntegrationTests {
 
     //JSR-303
     @Test
-    void givenBookingWithoutTime_whenCreateNewBooking_thenShouldNotCreate() {
+    void givenBookingWithoutStartDate_whenCreateNewBooking_thenShouldNotCreate() {
         var booking = createBooking("test");
-        booking.setStartAt(null);
+        booking.setStartDate(null);
 
         ResponseEntity<String> response =
                 restTemplate.postForEntity(
@@ -250,7 +250,24 @@ class BookingIntegrationTests {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody())
-                .contains("startAt is mandatory");
+                .contains("startDate is mandatory");
+    }
+
+    //JSR-303
+    @Test
+    void givenBookingWithoutEndDate_whenCreateNewBooking_thenShouldNotCreate() {
+        var booking = createBooking("test");
+        booking.setEndDate(null);
+
+        ResponseEntity<String> response =
+                restTemplate.postForEntity(
+                        "/api/guest/bookings",
+                        booking,
+                        String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody())
+                .contains("endDate is mandatory");
     }
 
     @Test
@@ -267,13 +284,13 @@ class BookingIntegrationTests {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody())
-                .contains("A booking for the same time and property already exist");
+                .contains("Property is already booked for this period");
     }
 
     @Test
     void givenABookingWithWrongTimeFormat_whenCreateNewBooking_thenShouldNotCreate() {
         var booking = createBooking("test");
-        booking.setStartAt("2024-01-01 1:00 PM");
+        booking.setStartDate("2024-01-01 1:00 PM");
 
         ResponseEntity<String> response =
                 restTemplate.postForEntity(
@@ -284,38 +301,6 @@ class BookingIntegrationTests {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody())
                 .contains("Invalid date format, correct format is yyyy-MM-dd HH:mm:ss");
-    }
-
-    @Test
-    void givenABookingWithMinutes_whenCreateNewBooking_thenShouldNotCreate() {
-        var booking = createBooking("test");
-        booking.setStartAt("2024-01-01 12:40:00");
-
-        ResponseEntity<String> response =
-                restTemplate.postForEntity(
-                        "/api/guest/bookings",
-                        booking,
-                        String.class);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody())
-                .contains("Minutes and seconds must be 0");
-    }
-
-    @Test
-    void givenABookingWithSeconds_whenCreateNewBooking_thenShouldNotCreate() {
-        var booking = createBooking("test");
-        booking.setStartAt("2024-01-01 12:00:30");
-
-        ResponseEntity<String> response =
-                restTemplate.postForEntity(
-                        "/api/guest/bookings",
-                        booking,
-                        String.class);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody())
-                .contains("Minutes and seconds must be 0");
     }
 
     @Test
@@ -337,14 +322,14 @@ class BookingIntegrationTests {
     @Test
     void givenABookingWithSameTime_whenUpdateBookingWithSameTime_thenShouldNotUpdate() {
         var booking = createBooking("test");
-        var time = booking.getStartAt();
+        var time = booking.getStartDate();
         bookingRepository.save(booking);
 
         var subject = createBooking("test");
-        subject.setStartAt("2024-01-01 09:00:00");
+        subject.setStartDate("2024-01-01 09:00:00");
 
         Long id = bookingRepository.save(subject).getId();
-        subject.setStartAt(time);
+        subject.setStartDate(time);
 
         ResponseEntity<String> response = restTemplate.exchange(
                 "/api/guest/bookings/"+id,
@@ -354,7 +339,7 @@ class BookingIntegrationTests {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody())
-                .contains("A booking for the same time and property already exist");
+                .contains("Property is already booked for this period");
     }
 
     @Test

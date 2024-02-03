@@ -14,5 +14,5 @@ server:
   port: 8080
 logging:
   level:
-    root: INFO
+    root: DEBUG
     org.hibernate.SQL: INFO

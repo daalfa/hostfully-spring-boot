@@ -23,6 +23,7 @@ import static com.davi.demo.booking.service.TestData.createBlocking;
 import static java.util.Collections.emptyList;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -85,6 +86,8 @@ class BlockingServiceTest {
         assertThat(exception.getMessage()).isEqualTo("Blocking id: 99 not found");
     }
 
+    // DELETE TESTS
+
     @Test
     public void givenValidId_whenDeleteBlocking_thenDelete() {
         Long id = 1L;
@@ -111,21 +114,21 @@ class BlockingServiceTest {
         assertThat(exception.getMessage()).isEqualTo("Blocking id: 99 not found");
     }
 
+    // CREATE TESTS
+
     @Test
-    public void givenValidId_whenCreateBlocking_thenPersist() {
-        Long id = 1L;
+    public void givenValidBlocking_whenCreateBlocking_thenCreate() {
         var blocking = createBlocking("test");
-        blocking.setId(id);
 
         when(propertyService.getPropertyById(blocking.getProperty().getId()))
                 .thenReturn(blocking.getProperty());
 
-        when(blockingRepository.findBlockingsByPropertyAndBookingTimeRange(
+        when(blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
                 eq(blocking.getProperty()), anyString(), anyString()))
                 .thenReturn(emptyList());
 
-        when(bookingRepository.findBookingsByPropertyAndBookingTimeRange(
-                eq(blocking.getProperty()), anyString(), anyString()))
+        when(bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                eq(blocking.getProperty()), anyString(), anyString(), anyBoolean()))
                 .thenReturn(emptyList());
 
         when(blockingRepository.save(saveBlockingCaptor.capture()))
@@ -137,23 +140,22 @@ class BlockingServiceTest {
     }
 
     @Test
-    public void givenBookingNotCanceledWithSameDay_whenCreateBlocking_thenPersistAndCancelBooking() {
-        Long id = 1L;
+    public void givenExistingBookingsWithinPeriod_whenCreateBlocking_thenCreateAndCancelBookings() {
         var blocking = createBlocking("test");
-        blocking.setId(id);
 
-        Booking booking = mock(Booking.class);
+        Booking booking1 = mock(Booking.class);
+        Booking booking2 = mock(Booking.class);
 
         when(propertyService.getPropertyById(blocking.getProperty().getId()))
                 .thenReturn(blocking.getProperty());
 
-        when(blockingRepository.findBlockingsByPropertyAndBookingTimeRange(
+        when(blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
                 eq(blocking.getProperty()), anyString(), anyString()))
                 .thenReturn(emptyList());
 
-        when(bookingRepository.findBookingsByPropertyAndBookingTimeRange(
-                eq(blocking.getProperty()), anyString(), anyString()))
-                .thenReturn(List.of(booking));
+        when(bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                eq(blocking.getProperty()), anyString(), anyString(), anyBoolean()))
+                .thenReturn(List.of(booking1, booking2));
 
         when(blockingRepository.save(saveBlockingCaptor.capture()))
                 .thenReturn(blocking);
@@ -161,27 +163,154 @@ class BlockingServiceTest {
         blockingService.createBlocking(blocking);
 
         assertThat(saveBlockingCaptor.getValue()).isEqualTo(blocking);
-        verify(booking).setIsCanceled(true);
+
+        verify(booking1).setIsCanceled(true);
+        verify(booking2).setIsCanceled(true);
     }
 
     @Test
-    public void givenExistBlockingWithSameDayAndProperty_whenCreateBlocking_thenThrowBadRequestException() {
-        Long id = 1L;
+    public void givenExistBlockingWithSameTimeAndProperty_whenCreateBlocking_thenThrowBadRequestException() {
+        Long id = 2L;
+        var existingBlocking = createBlocking("existing block");
+        existingBlocking.setId(id);
+
         var blocking = createBlocking("test");
-        blocking.setId(id);
 
         when(propertyService.getPropertyById(blocking.getProperty().getId()))
                 .thenReturn(blocking.getProperty());
 
-        when(blockingRepository.findBlockingsByPropertyAndBookingTimeRange(
+        when(blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
                 eq(blocking.getProperty()), anyString(), anyString()))
-                .thenReturn(List.of(blocking));
+                .thenReturn(List.of(existingBlocking));
 
         BadRequestException exception = assertThrows(BadRequestException.class, () -> {
             blockingService.createBlocking(blocking);
         });
 
         assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(exception.getMessage()).isEqualTo("A blocking for the same day and property already exist");
+        assertThat(exception.getMessage()).isEqualTo("Property is already blocked for this period");
+    }
+
+    @Test
+    public void givenInvalidStartEndDate_whenCreateBlocking_thenThrowValidationException() {
+        var blocking = createBlocking("test");
+        blocking.setStartDate("2024-01-02 12:00:00");
+        blocking.setEndDate("2024-01-02 01:00:00");
+
+        when(propertyService.getPropertyById(blocking.getProperty().getId()))
+                .thenReturn(blocking.getProperty());
+
+        ValidationException exception = assertThrows(ValidationException.class, () -> {
+            blockingService.createBlocking(blocking);
+        });
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(exception.getMessage()).isEqualTo("Blocking endDate must be after startDate");
+    }
+
+    // UPDATE TESTS
+
+    @Test
+    public void givenValidId_whenUpdateBlocking_thenUpdate() {
+        Long id = 1L;
+        var updatedBlocking = createBlocking("test");
+        var existingBlocking = mock(Blocking.class);
+
+        when(blockingRepository.findById(id))
+                .thenReturn(Optional.of(existingBlocking));
+
+        when(propertyService.getPropertyById(updatedBlocking.getProperty().getId()))
+                .thenReturn(updatedBlocking.getProperty());
+
+        when(blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
+                eq(updatedBlocking.getProperty()), anyString(), anyString()))
+                .thenReturn(emptyList());
+
+        when(bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                eq(updatedBlocking.getProperty()), anyString(), anyString(), anyBoolean()))
+                .thenReturn(emptyList());
+
+        blockingService.updateBlocking(id, updatedBlocking);
+
+        verify(existingBlocking).setName(updatedBlocking.getName());
+        verify(existingBlocking).setStartDate(updatedBlocking.getStartDate());
+        verify(existingBlocking).setEndDate(updatedBlocking.getEndDate());
+        verify(existingBlocking).setProperty(updatedBlocking.getProperty());
+    }
+
+    @Test
+    public void givenExistingBookingsWithinPeriod_whenUpdateBlocking_thenUpdateAndCancelBookings() {
+        Long id = 1L;
+        var updatedBlocking = createBlocking("test");
+        var existingBlocking = mock(Blocking.class);
+        var booking1 = mock(Booking.class);
+        var booking2 = mock(Booking.class);
+
+        when(blockingRepository.findById(id))
+                .thenReturn(Optional.of(existingBlocking));
+
+        when(propertyService.getPropertyById(updatedBlocking.getProperty().getId()))
+                .thenReturn(updatedBlocking.getProperty());
+
+        when(blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
+                eq(updatedBlocking.getProperty()), anyString(), anyString()))
+                .thenReturn(emptyList());
+
+        when(bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                eq(updatedBlocking.getProperty()), anyString(), anyString(), anyBoolean()))
+                .thenReturn(List.of(booking1, booking2));
+
+        blockingService.updateBlocking(id, updatedBlocking);
+
+        verify(booking1).setIsCanceled(true);
+        verify(booking2).setIsCanceled(true);
+    }
+
+    @Test
+    public void givenExistBlockingWithSameTimeAndProperty_whenUpdateBlocking_thenThrowBadRequestException() {
+        Long id = 1L;
+
+        var existingBlocking = createBlocking("existing block");
+        existingBlocking.setId(2L);
+
+        var blocking = createBlocking("test");
+
+        when(blockingRepository.findById(id))
+                .thenReturn(Optional.of(blocking));
+
+        when(propertyService.getPropertyById(blocking.getProperty().getId()))
+                .thenReturn(blocking.getProperty());
+
+        when(blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
+                eq(blocking.getProperty()), anyString(), anyString()))
+                .thenReturn(List.of(existingBlocking));
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () -> {
+            blockingService.updateBlocking(id, blocking);
+        });
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(exception.getMessage()).isEqualTo("Property is already blocked for this period");
+    }
+
+    @Test
+    public void givenInvalidStartEndDate_whenUpdateBlocking_thenThrowValidationException() {
+        Long id = 1L;
+        var blocking = createBlocking("test");
+        blocking.setStartDate("2024-01-02 12:00:00");
+        blocking.setEndDate("2024-01-02 01:00:00");
+
+        when(blockingRepository.findById(id))
+                .thenReturn(Optional.of(blocking));
+
+        when(propertyService.getPropertyById(blocking.getProperty().getId()))
+                .thenReturn(blocking.getProperty());
+
+        ValidationException exception = assertThrows(ValidationException.class, () -> {
+            blockingService.updateBlocking(id, blocking);
+        });
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(exception.getMessage()).isEqualTo("Blocking endDate must be after startDate");
     }
 }

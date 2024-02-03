@@ -4,6 +4,8 @@ import com.davi.demo.booking.service.common.LocalDateTimeConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -34,10 +36,15 @@ public class Booking {
     @Size(min = 2, max = 100, message = "Description must be between 2 and 100 characters")
     private String description;
 
-    @NotBlank(message = "startAt is mandatory")
+    @NotBlank(message = "startDate is mandatory")
     @Convert(converter = LocalDateTimeConverter.class)
-    @Column(name = "start_at", nullable = false)
-    private String startAt;
+    @Column(name = "start_date", nullable = false)
+    private String startDate;
+
+    @NotBlank(message = "endDate is mandatory")
+    @Convert(converter = LocalDateTimeConverter.class)
+    @Column(name = "end_date", nullable = false)
+    private String endDate;
 
     @Column(name = "is_canceled")
     private Boolean isCanceled = false;
