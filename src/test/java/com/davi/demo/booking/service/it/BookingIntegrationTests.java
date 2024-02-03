@@ -2,6 +2,7 @@ package com.davi.demo.booking.service.it;
 
 import com.davi.demo.booking.service.model.Booking;
 import com.davi.demo.booking.service.model.Property;
+import com.davi.demo.booking.service.repository.BlockingRepository;
 import com.davi.demo.booking.service.repository.BookingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,9 +26,13 @@ class BookingIntegrationTests {
     @Autowired
     private BookingRepository bookingRepository;
 
+    @Autowired
+    private BlockingRepository blockingRepository;
+
     @BeforeEach
     void setup() {
         bookingRepository.deleteAll();
+        blockingRepository.deleteAll();
     }
 
     // Happy Path
