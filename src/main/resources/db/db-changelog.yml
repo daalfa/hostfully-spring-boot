@@ -1,6 +1,7 @@
 databaseChangeLog:
   - changeSet:
-      id: Create-booking-table
+      id: create-tables
+      comment: Create Initial Tables Booking, Property and Blocking
       author: davi
       changes:
         - createTable:
@@ -23,7 +24,12 @@ databaseChangeLog:
                   name: description
                   type: varchar(255)
               - column:
-                  name: start_at
+                  name: start_date
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: end_date
                   type: timestamp
                   constraints:
                     nullable: false
@@ -38,17 +44,17 @@ databaseChangeLog:
                     nullable: false
               - createIndex:
                   tableName: booking
-                  indexName: idx_property_id_start_at
+                  indexName: idx_booking_dates_property_id_status
                   unique: false
                   columns:
                     - column:
+                        name: start_date
+                    - column:
+                        name: end_date
+                    - column:
                         name: property_id
                     - column:
-                        name: start_at
-  - changeSet:
-      id: Create-property-table
-      author: davi
-      changes:
+                        name: status
         - createTable:
             schema: public
             tableName: property
@@ -63,10 +69,6 @@ databaseChangeLog:
               - column:
                   name: name
                   type: varchar(255)
-  - changeSet:
-      id: Create-blocking-table
-      author: davi
-      changes:
         - createTable:
             schema: public
             tableName: blocking
@@ -82,7 +84,12 @@ databaseChangeLog:
                   name: name
                   type: varchar(255)
               - column:
-                  name: blocking_time
+                  name: start_date
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: end_date
                   type: timestamp
                   constraints:
                     nullable: false
@@ -91,9 +98,21 @@ databaseChangeLog:
                   type: bigint
                   constraints:
                     nullable: false
+              - createIndex:
+                  tableName: booking
+                  indexName: idx_blocking_dates_property_id
+                  unique: false
+                  columns:
+                    - column:
+                        name: start_date
+                    - column:
+                        name: end_date
+                    - column:
+                        name: property_id
   - changeSet:
-      id: test-data
+      id: dev-data
       author: davi
+      context: dev
       changes:
         - insert:
             tableName: property
@@ -108,8 +127,11 @@ databaseChangeLog:
                   name: name
                   value: "Booking 1"
               - column:
-                  name: start_at
-                  value: "2024-01-01 10:00:00"
+                  name: start_date
+                  value: "2024-01-01 00:00:00"
+              - column:
+                  name: end_date
+                  value: "2024-01-01 01:00:00"
               - column:
                   name: property_id
                   value: "1"

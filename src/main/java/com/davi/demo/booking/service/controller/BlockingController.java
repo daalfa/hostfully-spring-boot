@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -45,6 +46,12 @@ public class BlockingController {
     @ResponseStatus(HttpStatus.CREATED)
     public void createBlocking(@Valid @RequestBody Blocking blocking) {
         blockingService.createBlocking(blocking);
+    }
+
+    @PutMapping("/blockings/{id}")
+    @ResponseStatus(HttpStatus.OK)
+    public void createBlocking(@PathVariable String id, @Valid @RequestBody Blocking blocking) {
+        blockingService.updateBlocking(toLong(id), blocking);
     }
 
     @DeleteMapping("/blockings/{id}")

@@ -4,6 +4,7 @@ import com.davi.demo.booking.service.exception.BadRequestException;
 import com.davi.demo.booking.service.exception.NotFoundException;
 import com.davi.demo.booking.service.exception.ValidationException;
 import com.davi.demo.booking.service.model.Booking;
+import com.davi.demo.booking.service.repository.BlockingRepository;
 import com.davi.demo.booking.service.repository.BookingRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +33,9 @@ class BookingServiceTest {
 
     @Mock
     private BookingRepository bookingRepository;
+
+    @Mock
+    private BlockingRepository blockingRepository;
 
     @Mock
     private PropertyService propertyService;
@@ -79,6 +83,8 @@ class BookingServiceTest {
         assertThat(exception.getMessage()).isEqualTo("Booking id: 99 not found");
     }
 
+    // DELETE TESTS
+
     @Test
     public void givenValidId_whenDeleteBooking_thenDelete() {
         Long id = 1L;
@@ -105,17 +111,21 @@ class BookingServiceTest {
         assertThat(exception.getMessage()).isEqualTo("Booking id: 99 not found");
     }
 
+    // CREATE TESTS
+
     @Test
-    public void givenValidId_whenCreateBooking_thenPersist() {
-        Long id = 1L;
+    public void givenValidBooking_whenCreateBooking_thenCreate() {
         var booking = createBooking("test");
-        booking.setId(id);
 
         when(propertyService.getPropertyById(booking.getProperty().getId()))
                 .thenReturn(booking.getProperty());
 
-        when(bookingRepository.findActiveBookingsByBookingTimeAndProperty(
-                booking.getStartAt(), booking.getProperty()))
+        when(bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                booking.getProperty(), booking.getStartDate(), booking.getEndDate(), false))
+                .thenReturn(emptyList());
+
+        when(blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
+                booking.getProperty(), booking.getStartDate(), booking.getEndDate()))
                 .thenReturn(emptyList());
 
         when(bookingRepository.save(saveBookingCaptor.capture()))
@@ -140,35 +150,16 @@ class BookingServiceTest {
     }
 
     @Test
-    public void givenBookingWithStartAtMinuteAndSecond_whenCreateBooking_thenThrowBadRequestException() {
-        Long id = 1L;
-        var booking = createBooking("test");
-        booking.setId(id);
-        booking.setStartAt("2024-01-01 10:30:59");
-
-        ValidationException exception = assertThrows(ValidationException.class, () -> {
-            bookingService.createBooking(booking);
-        });
-
-        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(exception.getMessage()).isEqualTo("Minutes and seconds must be 0");
-    }
-
-
-    @Test
     public void givenExistBookingWithSameTimeAndProperty_whenCreateBooking_thenThrowBadRequestException() {
-        Long id = 1L;
         var booking = createBooking("test");
-        booking.setId(id);
-
         var existingBooking = createBooking("existing booking");
         existingBooking.setId(2L);
 
         when(propertyService.getPropertyById(booking.getProperty().getId()))
                 .thenReturn(booking.getProperty());
 
-        when(bookingRepository.findActiveBookingsByBookingTimeAndProperty(
-                booking.getStartAt(), booking.getProperty()))
+        when(bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                booking.getProperty(), booking.getStartDate(), booking.getEndDate(), booking.getIsCanceled()))
                 .thenReturn(List.of(existingBooking));
 
         BadRequestException exception = assertThrows(BadRequestException.class, () -> {
@@ -176,8 +167,51 @@ class BookingServiceTest {
         });
 
         assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(exception.getMessage()).isEqualTo("A booking for the same time and property already exist");
+        assertThat(exception.getMessage()).isEqualTo("Property is already booked for this period");
     }
+
+    @Test
+    public void givenExistBlockWithSameTimeAndProperty_whenCreateBooking_thenThrowBadRequestException() {
+        var booking = createBooking("test");
+        var blocking = createBlocking("block");
+
+        when(propertyService.getPropertyById(booking.getProperty().getId()))
+                .thenReturn(booking.getProperty());
+
+        when(bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                booking.getProperty(), booking.getStartDate(), booking.getEndDate(), false))
+                .thenReturn(emptyList());
+
+        when(blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
+                booking.getProperty(), booking.getStartDate(), booking.getEndDate()))
+                .thenReturn(List.of(blocking));
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () -> {
+            bookingService.createBooking(booking);
+        });
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(exception.getMessage()).isEqualTo("Property is blocked for this period");
+    }
+
+    @Test
+    public void givenInvalidStartEndDate_whenCreateBooking_thenThrowValidationException() {
+        var booking = createBooking("test");
+        booking.setStartDate("2024-01-02 12:00:00");
+        booking.setEndDate("2024-01-02 01:00:00");
+
+        when(propertyService.getPropertyById(booking.getProperty().getId()))
+                .thenReturn(booking.getProperty());
+
+        ValidationException exception = assertThrows(ValidationException.class, () -> {
+            bookingService.createBooking(booking);
+        });
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(exception.getMessage()).isEqualTo("Booking endDate must be after startDate");
+    }
+
+    // UPDATE TESTS
 
     @Test
     public void givenValidId_whenUpdateBooking_thenUpdate() {
@@ -189,19 +223,25 @@ class BookingServiceTest {
         when(bookingRepository.findById(id))
                 .thenReturn(Optional.of(existingBooking));
 
-        when(bookingRepository.findActiveBookingsByBookingTimeAndProperty(
-                updatedBooking.getStartAt(), updatedBooking.getProperty()))
+        when(bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                updatedBooking.getProperty(), updatedBooking.getStartDate(),
+                updatedBooking.getEndDate(), false))
                 .thenReturn(emptyList());
 
         when(propertyService.getPropertyById(updatedBooking.getProperty().getId()))
                 .thenReturn(updatedBooking.getProperty());
+
+        when(blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
+                updatedBooking.getProperty(), updatedBooking.getStartDate(), updatedBooking.getEndDate()))
+                .thenReturn(emptyList());
 
         bookingService.updateBooking(id, updatedBooking);
 
         verify(existingBooking).setName(updatedBooking.getName());
         verify(existingBooking).setDescription(updatedBooking.getDescription());
         verify(existingBooking).setIsCanceled(updatedBooking.getIsCanceled());
-        verify(existingBooking).setStartAt(updatedBooking.getStartAt());
+        verify(existingBooking).setStartDate(updatedBooking.getStartDate());
+        verify(existingBooking).setEndDate(updatedBooking.getEndDate());
         verify(existingBooking).setProperty(updatedBooking.getProperty());
     }
 
@@ -232,8 +272,8 @@ class BookingServiceTest {
         when(bookingRepository.findById(id))
                 .thenReturn(Optional.of(booking));
 
-        when(bookingRepository.findActiveBookingsByBookingTimeAndProperty(
-                booking.getStartAt(), booking.getProperty()))
+        when(bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                booking.getProperty(), booking.getStartDate(), booking.getEndDate(), false))
                 .thenReturn(List.of(existingBooking));
 
         BadRequestException exception = assertThrows(BadRequestException.class, () -> {
@@ -241,6 +281,55 @@ class BookingServiceTest {
         });
 
         assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(exception.getMessage()).isEqualTo("A booking for the same time and property already exist");
+        assertThat(exception.getMessage()).isEqualTo(
+                "Property is already booked for this period");
+    }
+
+    @Test
+    public void givenExistingBlockWithSameTimeAndProperty_whenUpdateBooking_thenThrowBadRequestException() {
+        Long id = 1L;
+        var booking = createBooking("test");
+
+        var blocking = createBlocking("block");
+
+        when(bookingRepository.findById(id))
+                .thenReturn(Optional.of(booking));
+
+        when(bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                booking.getProperty(), booking.getStartDate(), booking.getEndDate(), false))
+                .thenReturn(emptyList());
+
+        when(blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
+                booking.getProperty(), booking.getStartDate(), booking.getEndDate()))
+                .thenReturn(List.of(blocking));
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () -> {
+            bookingService.updateBooking(id, booking);
+        });
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(exception.getMessage()).isEqualTo(
+                "Property is blocked for this period");
+    }
+
+    @Test
+    public void givenInvalidStartEndDate_whenUpdateBooking_thenThrowValidationException() {
+        Long id = 1L;
+        var booking = createBooking("test");
+        booking.setStartDate("2024-01-02 12:00:00");
+        booking.setEndDate("2024-01-02 01:00:00");
+
+        when(bookingRepository.findById(id))
+                .thenReturn(Optional.of(booking));
+
+        when(propertyService.getPropertyById(booking.getProperty().getId()))
+                .thenReturn(booking.getProperty());
+
+        ValidationException exception = assertThrows(ValidationException.class, () -> {
+            bookingService.updateBooking(id, booking);
+        });
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(exception.getMessage()).isEqualTo("Booking endDate must be after startDate");
     }
 }

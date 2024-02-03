@@ -75,8 +75,8 @@ class BlockingIntegrationTests {
     }
 
     @Test
-    void shouldCreateBlockingAndCancelBookingsWithSameDay() {
-        //startAt = 2024-01-01 01:00:00
+    void shouldCreateBlockingAndCancelBookingsWithinSamePeriod() {
+        //2024-01-01 01:00:00
         var booking = createBooking("testBooking");
         assertThat(booking.getIsCanceled()).isFalse();
         Long bookingId = bookingRepository.save(booking).getId();
@@ -97,6 +97,25 @@ class BlockingIntegrationTests {
     }
 
     @Test
+    void shouldUpdateBlocking() {
+        var blocking = createBlocking("block");
+        Long id = blockingRepository.save(blocking).getId();
+
+        var updatedBlocking = createBlocking("updated block");
+
+        ResponseEntity<Void> response = restTemplate.exchange(
+                "/api/host/blockings/"+id,
+                HttpMethod.PUT,
+                new HttpEntity<>(updatedBlocking),
+                Void.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        assertThat(blockingRepository.findById(id))
+                .map(Blocking::getName).hasValue("updated block");
+    }
+
+    @Test
     void shouldDeleteBlocking() {
         var blocking = createBlocking("test");
         Long id = blockingRepository.save(blocking).getId();
@@ -114,13 +133,12 @@ class BlockingIntegrationTests {
     // Unhappy Path
 
     @Test
-    void givenExistingBlockingWithSameDay_whenCreateNewBlocking_thenShouldNotCreate() {
-        //blockingTime = 2024-01-01 01:00:00
-        var blocking = createBlocking("test");
+    void givenExistingBlocking_whenCreateNewBlockingWithSameTime_thenShouldNotCreate() {
+        //2024-01-01 00:00:00
+        var blocking = createBlocking("existing block");
         blockingRepository.save(blocking);
 
         var sameDayBlocking = createBlocking("test");
-        sameDayBlocking.setBlockingTime("2024-01-01 23:30:00");
 
         ResponseEntity<String> response =
                 restTemplate.postForEntity(
@@ -130,7 +148,7 @@ class BlockingIntegrationTests {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody())
-                .contains("A blocking for the same day and property already exist");
+                .contains("Property is already blocked for this period");
     }
 
     //JSR-303
@@ -168,9 +186,9 @@ class BlockingIntegrationTests {
 
     //JSR-303
     @Test
-    void givenBlockingWithNoBlockingTime_whenCreateNewBlocking_thenShouldNotCreate() {
+    void givenBlockingWithNoStartDate_whenCreateNewBlocking_thenShouldNotCreate() {
         var blocking = createBlocking("test");
-        blocking.setBlockingTime(null);
+        blocking.setStartDate(null);
 
         ResponseEntity<String> response =
                 restTemplate.postForEntity(
@@ -180,13 +198,30 @@ class BlockingIntegrationTests {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody())
-                .contains("blockingTime is mandatory");
+                .contains("startDate is mandatory");
+    }
+
+    //JSR-303
+    @Test
+    void givenBlockingWithNoEndDate_whenCreateNewBlocking_thenShouldNotCreate() {
+        var blocking = createBlocking("test");
+        blocking.setEndDate(null);
+
+        ResponseEntity<String> response =
+                restTemplate.postForEntity(
+                        "/api/host/blockings",
+                        blocking,
+                        String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody())
+                .contains("endDate is mandatory");
     }
 
     @Test
     void givenBlockingWithInvalidFormatBlockingTime_whenCreateNewBlocking_thenShouldNotCreate() {
         var blocking = createBlocking("test");
-        blocking.setBlockingTime("2024-01-01 12:00:00.000");
+        blocking.setStartDate("2024-01-01 12:00:00.000");
 
         ResponseEntity<String> response =
                 restTemplate.postForEntity(

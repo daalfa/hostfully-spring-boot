@@ -16,8 +16,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-
 @Entity
 @Table(name = "blocking")
 @Data
@@ -30,10 +28,15 @@ public class Blocking {
 
     private String name;
 
-    @NotBlank(message = "blockingTime is mandatory")
+    @NotBlank(message = "startDate is mandatory")
     @Convert(converter = LocalDateTimeConverter.class)
-    @Column(name = "blocking_time", nullable = false)
-    private String blockingTime;
+    @Column(name = "start_date", nullable = false)
+    private String startDate;
+
+    @NotBlank(message = "endDate is mandatory")
+    @Convert(converter = LocalDateTimeConverter.class)
+    @Column(name = "end_date", nullable = false)
+    private String endDate;
 
     @NotNull(message = "property is mandatory")
     @OneToOne

@@ -4,6 +4,7 @@ import com.davi.demo.booking.service.exception.BadRequestException;
 import com.davi.demo.booking.service.exception.NotFoundException;
 import com.davi.demo.booking.service.exception.ValidationException;
 import com.davi.demo.booking.service.model.Blocking;
+import com.davi.demo.booking.service.model.Booking;
 import com.davi.demo.booking.service.repository.BlockingRepository;
 import com.davi.demo.booking.service.repository.BookingRepository;
 import jakarta.transaction.Transactional;
@@ -12,8 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-import static com.davi.demo.booking.service.common.DateUtil.getSameDayEndTime;
-import static com.davi.demo.booking.service.common.DateUtil.getSameDayStartTime;
+import static com.davi.demo.booking.service.common.DateUtil.parse;
 
 @Service
 public class BlockingService {
@@ -47,30 +47,74 @@ public class BlockingService {
     /**
      * Create a new Blocking only if Property already exists.
      * Ignore all other Property fields, except id.
-     * Cancel Bookings if date is the same day.
-     * The time portion of blockingTime hour, minute and second is ignored,
-     * since blocking is daily, we validate if no block with same day exist.
+     * Cancel Bookings if date overlaps.
      */
     @Transactional
     public void createBlocking(Blocking blocking) {
         var property = propertyService.getPropertyById(blocking.getProperty().getId());
         blocking.setProperty(property);
 
-        var start = getSameDayStartTime(blocking.getBlockingTime());
-        var end = getSameDayEndTime(blocking.getBlockingTime());
+        validateStartDateBeforeEndDate(blocking);
+        validateNoBlockingsWithSameTimeAndProperty(blocking);
 
-        blockingRepository.findBlockingsByPropertyAndBookingTimeRange(property,
-                start, end).stream().findFirst()
-                .ifPresent(existing -> {
-                    throw new BadRequestException(
-                            "A blocking for the same day and property already exist");
-                });
-
-        bookingRepository.findBookingsByPropertyAndBookingTimeRange(property,
-                        start, end)
-                .forEach(booking -> booking.setIsCanceled(true));
-
+        doCancelBookings(blocking);
         blockingRepository.save(blocking);
+    }
+
+    @Transactional
+    public void updateBlocking(Long id, Blocking updatedBlocking) {
+        blockingRepository.findById(id)
+                .ifPresentOrElse(blocking -> {
+                    var property = propertyService.getPropertyById(updatedBlocking.getProperty().getId());
+
+                    validateStartDateBeforeEndDate(updatedBlocking);
+                    validateNoBlockingsWithSameTimeAndProperty(id, updatedBlocking);
+                    doCancelBookings(updatedBlocking);
+
+                    blocking.setProperty(property);
+                    blocking.setName(updatedBlocking.getName());
+                    blocking.setStartDate(updatedBlocking.getStartDate());
+                    blocking.setEndDate(updatedBlocking.getEndDate());
+                }, () -> {
+                    throw new NotFoundException("Blocking id: {0,number,#} not found", id);
+                });
+    }
+
+    private void validateNoBlockingsWithSameTimeAndProperty(Blocking blocking) {
+        validateNoBlockingsWithSameTimeAndProperty(blocking.getId(), blocking);
+    }
+
+    /**
+     * Check if there are no blocks within the same period
+     * In case of updates we ignore the response entity with same id.
+     */
+    private void validateNoBlockingsWithSameTimeAndProperty(Long id, Blocking blocking) {
+    blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
+            blocking.getProperty(), blocking.getStartDate(), blocking.getEndDate())
+            .stream()
+            .map(Blocking::getId)
+            .filter(savedId -> !savedId.equals(id))
+            .findFirst()
+            .ifPresent(existingBlocking -> {
+                throw new BadRequestException(
+                        "Property is already blocked for this period");
+            });
+    }
+
+    private void validateStartDateBeforeEndDate(Blocking blocking) {
+        var startDate = parse(blocking.getStartDate());
+        var endDate = parse(blocking.getEndDate());
+
+        if(startDate.isAfter(endDate) || startDate.equals(endDate)) {
+            throw new ValidationException(
+                    "Blocking endDate must be after startDate");
+        }
+    }
+
+    private void doCancelBookings(Blocking blocking) {
+        bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                        blocking.getProperty(), blocking.getStartDate(), blocking.getEndDate(), false)
+                .forEach(booking -> booking.setIsCanceled(true));
     }
 
     @Transactional

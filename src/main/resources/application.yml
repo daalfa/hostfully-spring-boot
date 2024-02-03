@@ -6,6 +6,7 @@ spring:
     password:
   liquibase:
     change-log: classpath:db/db-changelog.yml
+    contexts: dev
   h2:
     console:
       enabled: true

@@ -14,7 +14,8 @@ public class TestData {
         booking.setName(name);
         booking.setDescription("description");
         booking.setIsCanceled(false);
-        booking.setStartAt("2024-01-01 01:00:00");
+        booking.setStartDate("2024-01-01 01:00:00");
+        booking.setEndDate("2024-01-01 02:00:00");
         booking.setProperty(property);
         return booking;
     }
@@ -25,7 +26,8 @@ public class TestData {
 
         var blocking = new Blocking();
         blocking.setName(name);
-        blocking.setBlockingTime("2024-01-01 01:00:00");
+        blocking.setStartDate("2024-01-01 00:00:00");
+        blocking.setEndDate("2024-01-02 00:00:00");
         blocking.setProperty(property);
         return blocking;
     }

@@ -7,7 +7,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -15,22 +14,16 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     @Query("""
             SELECT b FROM Booking b
-            WHERE b.startAt = :startAt
-            AND b.property = :property
-            AND b.isCanceled = false
+            WHERE b.property = :property
+            AND b.isCanceled = :isCanceled
+            AND ((b.startDate < :endDate AND b.endDate > :startDate)
+                OR
+                (b.startDate = :startDate AND b.endDate = :endDate))
             """)
-    List<Booking> findActiveBookingsByBookingTimeAndProperty(
-            @Param("startAt") String startAt,
-            @Param("property") Property property);
-
-    @Query("""
-            SELECT b FROM Booking b
-            WHERE b.startAt BETWEEN :startTime AND :endTime
-            AND b.property = :property
-            """)
-    List<Booking> findBookingsByPropertyAndBookingTimeRange(
+    List<Booking> findBookingsByPropertyAndBookingTimeRangeAndStatus(
             @Param("property") Property property,
-            @Param("startTime") String startTime,
-            @Param("endTime") String endTime
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate,
+            @Param("isCanceled") Boolean isCanceled
     );
 }

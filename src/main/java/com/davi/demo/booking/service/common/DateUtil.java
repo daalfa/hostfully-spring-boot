@@ -25,20 +25,4 @@ public class DateUtil {
             return null;
         }
     }
-
-    public static void validateMinuteAndSecondIsZero(String date) {
-        var dateTime = parse(date);
-        if(dateTime.getMinute() > 0 || dateTime.getSecond() > 0)
-            throw new ValidationException("Minutes and seconds must be 0");
-    }
-
-    public static String getSameDayStartTime(String date) {
-        var dateTime = parse(date).withHour(0).withMinute(0).withSecond(0);
-        return format(dateTime);
-    }
-
-    public static String getSameDayEndTime(String date) {
-        var dateTime = parse(date).withHour(23).withMinute(59).withSecond(59);
-        return format(dateTime);
-    }
 }

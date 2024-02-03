@@ -14,11 +14,13 @@ public interface BlockingRepository extends JpaRepository<Blocking, Long> {
 
     @Query("""
             SELECT b FROM Blocking b
-            WHERE b.blockingTime BETWEEN :startTime AND :endTime
-            AND b.property = :property
+            WHERE b.property = :property
+            AND ((b.startDate < :endDate AND b.endDate > :startDate)
+                OR
+                (b.startDate = :startDate AND b.endDate = :endDate))
             """)
-    List<Blocking> findBlockingsByPropertyAndBookingTimeRange(
+    List<Blocking> findBlockingsByPropertyAndBlockingTimeRange(
             @Param("property") Property property,
-            @Param("startTime") String startTime,
-            @Param("endTime") String endTime);
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate);
 }

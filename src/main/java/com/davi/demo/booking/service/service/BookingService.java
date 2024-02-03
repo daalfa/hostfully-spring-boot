@@ -4,28 +4,30 @@ import com.davi.demo.booking.service.exception.BadRequestException;
 import com.davi.demo.booking.service.exception.NotFoundException;
 import com.davi.demo.booking.service.exception.ValidationException;
 import com.davi.demo.booking.service.model.Booking;
+import com.davi.demo.booking.service.repository.BlockingRepository;
 import com.davi.demo.booking.service.repository.BookingRepository;
 import jakarta.transaction.Transactional;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Objects;
 
-import static com.davi.demo.booking.service.common.DateUtil.validateMinuteAndSecondIsZero;
+import static com.davi.demo.booking.service.common.DateUtil.parse;
 
 @Service
-@Slf4j
 public class BookingService {
     private final BookingRepository bookingRepository;
+    private final BlockingRepository blockingRepository;
+
     private final PropertyService propertyService;
 
 
     @Autowired
     public BookingService(BookingRepository bookingRepository,
+                          BlockingRepository blockingRepository,
                           PropertyService propertyService) {
         this.bookingRepository = bookingRepository;
+        this.blockingRepository = blockingRepository;
         this.propertyService = propertyService;
     }
 
@@ -34,7 +36,7 @@ public class BookingService {
             throw new ValidationException("Booking Id is required");
         }
         return bookingRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Booking id: {0} not found", id));
+                .orElseThrow(() -> new NotFoundException("Booking id: {0,number,#} not found", id));
     }
 
     public List<Booking> getAllBookings() {
@@ -42,8 +44,7 @@ public class BookingService {
     }
 
     /**
-     * Create a new Booking only if Property already exists.
-     * StartAt must be exact hour like 01:00:00 or 23:00:00
+     * Create a new Booking only if Property already exists and there is no Block.
      * Ignore all other Property fields, except id.
      */
     @Transactional
@@ -51,64 +52,87 @@ public class BookingService {
         if(booking.getIsCanceled())
             throw new ValidationException("Cannot create a canceled booking");
 
-        validateMinuteAndSecondIsZero(booking.getStartAt());
-
         var property = propertyService.getPropertyById(booking.getProperty().getId());
         booking.setProperty(property);
-        validateBookingsWithSameTimeAndProperty(booking);
+
+        validateStartAndEndDate(booking);
+        validateNoBookingsWithSameTimeAndProperty(booking);
+        validateNoBlockingsWithSameTimeAndProperty(booking);
 
         bookingRepository.save(booking);
     }
 
     /**
-     * Update a Booking only if Property already exists.
-     * StartAt must be exact hour like 01:00:00 or 23:00:00
+     * Update a Booking only if Property already exists and there is no block.
      * Ignore all other Property fields, except id.
      */
     @Transactional
     public void updateBooking(Long id, Booking updatedBooking) {
         bookingRepository.findById(id)
                 .ifPresentOrElse(booking -> {
-                    validateBookingsWithSameTimeAndProperty(id, updatedBooking);
+                    var property = propertyService.getPropertyById(updatedBooking.getProperty().getId());
+
+                    validateStartAndEndDate(updatedBooking);
+                    validateNoBookingsWithSameTimeAndProperty(id, updatedBooking);
+                    validateNoBlockingsWithSameTimeAndProperty(updatedBooking);
+
+                    booking.setProperty(property);
                     booking.setName(updatedBooking.getName());
                     booking.setDescription(updatedBooking.getDescription());
                     booking.setIsCanceled(updatedBooking.getIsCanceled());
-                    booking.setStartAt(updatedBooking.getStartAt());
-                    updateProperty(booking, updatedBooking);
+                    booking.setStartDate(updatedBooking.getStartDate());
+                    booking.setEndDate(updatedBooking.getEndDate());
                 }, () -> {
-                    throw new NotFoundException("Booking id: {0} not found", id);
+                    throw new NotFoundException("Booking id: {0,number,#} not found", id);
                 });
     }
 
-    private void validateBookingsWithSameTimeAndProperty(Booking booking) {
-        validateBookingsWithSameTimeAndProperty(booking.getId(), booking);
+    private void validateNoBookingsWithSameTimeAndProperty(Booking booking) {
+        validateNoBookingsWithSameTimeAndProperty(booking.getId(), booking);
     }
 
     /**
      * Check if there are no active bookings with same time and property.
      * Active booking has isCanceled = false.
+     * In case of updates we ignore the response entity with same id.
      */
-    private void validateBookingsWithSameTimeAndProperty(Long id, Booking booking) {
-        bookingRepository.findActiveBookingsByBookingTimeAndProperty(
-                        booking.getStartAt(), booking.getProperty())
+    private void validateNoBookingsWithSameTimeAndProperty(Long id, Booking booking) {
+        bookingRepository.findBookingsByPropertyAndBookingTimeRangeAndStatus(
+                        booking.getProperty(), booking.getStartDate(), booking.getEndDate(), false)
                 .stream()
                 .map(Booking::getId)
                 .filter(savedId -> !savedId.equals(id))
                 .findFirst()
                 .ifPresent(existingBooking -> {
                     throw new BadRequestException(
-                            "A booking for the same time and property already exist");
+                            "Property is already booked for this period");
                 });
     }
 
     /**
-     * Check if Property has changed, if yes then fetch and update.
+     * Check if there are no blocks with same time and property.
      */
-    private void updateProperty(Booking booking, Booking updatedBooking) {
-        var property = Objects.equals(booking.getProperty(), updatedBooking.getProperty())
-                ? updatedBooking.getProperty()
-                : propertyService.getPropertyById(updatedBooking.getProperty().getId());
-        booking.setProperty(property);
+    private void validateNoBlockingsWithSameTimeAndProperty(Booking booking) {
+        if(booking.getIsCanceled()) {
+            return;
+        }
+        blockingRepository.findBlockingsByPropertyAndBlockingTimeRange(
+                        booking.getProperty(), booking.getStartDate(), booking.getEndDate())
+                .stream()
+                .findFirst()
+                .ifPresent(existingBlocking -> {
+                    throw new BadRequestException("Property is blocked for this period");
+                });
+    }
+
+    private void validateStartAndEndDate(Booking booking) {
+        var startDate = parse(booking.getStartDate());
+        var endDate = parse(booking.getEndDate());
+
+        if(startDate.isAfter(endDate) || startDate.equals(endDate)) {
+            throw new ValidationException(
+                    "Booking endDate must be after startDate");
+        }
     }
 
     @Transactional
